@@ -8,7 +8,7 @@ from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
 SOURCE_CHANNEL_ID = int(os.environ["SOURCE_CHANNEL_ID"])
 TARGET_CHANNEL = os.environ.get("TARGET_CHANNEL", "@bigboori")
-POST_INTERVAL = 1200
+POST_INTERVAL = 2000
 DATA_DIR = Path("/data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_FILE = DATA_DIR / "photos.json"
