@@ -1,231 +1,278 @@
 import os
-import json
 import random
-import asyncio
-from pathlib import Path
-from telegram import Update, Bot
-from telegram.ext import Application, ContextTypes, MessageHandler, filters
+import secrets
 
-SOURCE_CHANNEL_ID = int(os.environ["SOURCE_CHANNEL_ID"])
-TARGET_CHANNEL = os.environ.get("TARGET_CHANNEL", "@bigboori")
-POST_INTERVAL = 2000
-DATA_DIR = Path("/data")
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-DB_FILE = DATA_DIR / "photos.json"
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    InlineQueryResultArticle,
+    InputTextMessageContent,
+    Update,
+)
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    InlineQueryHandler,
+    ContextTypes,
+)
 
-CAPTIONS = [
-    "Curves doing all the talking. 👀🔥 @bigboori",
-    "That view deserves a second look. 😮‍💨 @bigboori",
-    "Just casually stealing the spotlight. 👀🔥 @bigboori",
-    "Confidence looks good from every angle. 🔥 @bigboori",
-    "The view is definitely worth stopping for. 👀 @bigboori",
-    "A little reminder that curves never go unnoticed. 😮‍💨 @bigboori",
-    "Serving looks without saying a word. 🔥 @bigboori",
-    "Some pictures simply demand a second look. 👀 @bigboori",
-    "Main character energy. 🔥 @bigboori",
-    "The kind of post that makes you pause the scroll. 👀 @bigboori",
-    "No explanation needed. Just enjoy the view. 😮‍💨 @bigboori",
-    "Scroll carefully… you might miss the best part. 👀🔥 @bigboori",
-    "Too much confidence for one picture. 🔥 @bigboori",
-    "Consider this your sign to stop scrolling. 👀 @bigboori",
-    "A whole lot of attitude in one frame. 😮‍💨🔥 @bigboori",
-    "Curves and confidence — dangerous combination. 👀 @bigboori",
-    "Definitely not an ordinary scroll. 🔥 @bigboori",
-    "The timeline just got a little more interesting. 👀 @bigboori",
-    "Serving a look from every angle. 😮‍💨 @bigboori",
-    "One picture, zero words needed. 👀🔥 @bigboori",
-"Careful… staring this long might become a habit. 😏🔥 @bigboori",
-"Be honest… you already looked twice. 👀❤️ @bigboori",
-"I was going to scroll, but then this happened. 😮‍💨🔥 @bigboori",
-"Some views deserve a second look… and a third. 😏👀 @bigboori",
-"Too gorgeous to simply scroll past. 🔥😍 @bigboori",
-"Your eyes called… they want another look. 😉💋 @bigboori",
-"If beauty was a crime, this would be a serious case. 😏🔥 @bigboori",
-"Warning: dangerously easy on the eyes. 🚨😍 @bigboori",
-"One look was definitely not enough. 👀🔥 @bigboori",
-"Stop scrolling… your favorite view just arrived. 😏❤️ @bigboori",
-"This much confidence should come with a warning label. 🔥😮‍💨 @bigboori",
-"I don't believe in love at first sight… but I'm reconsidering. 😉❤️ @bigboori",
-"Somebody understood the assignment a little too well. 😏🔥 @bigboori",
-"The camera definitely had a favorite today. 👀😍 @bigboori",
-"Your timeline just got a whole lot more interesting. 🔥😏 @bigboori",
-"Tell me you noticed without telling me you noticed. 👀❤️ @bigboori",
-"This is what I call a serious distraction. 😮‍💨🔥 @bigboori",
-"Scrolling suddenly feels like the wrong decision. 😉🔥 @bigboori",
-"Some pictures don't need words. This is one of them. 😏👀 @bigboori",
-"Your thumb can wait… this deserves a moment. ❤️‍🔥👀 @bigboori",
-"Main-character energy from every angle. 😍🔥 @bigboori",
-"Too much charm for one picture. 😏💋 @bigboori",
-"This post just raised the temperature. 🥵🔥 @bigboori",
-"Somebody turn down the heat… actually, don't. 😏🔥 @bigboori",
-"If temptation had a profile picture… 👀😈 @bigboori",
-"This is your sign to stop scrolling. 😉🔥 @bigboori",
-"One picture, zero words needed. 😮‍💨❤️ @bigboori",
-"The view is doing all the talking. 👀🔥 @bigboori",
-"Confidence never looked this good. 😏❤️ @bigboori",
-"Your feed wasn't ready for this one. 🔥👀 @bigboori",
-"Some views are simply impossible to ignore. 😮‍💨😍 @bigboori",
-"I suddenly forgot what I was doing. 😏🔥 @bigboori",
-"Even the camera looks impressed. 👀❤️ @bigboori",
-"Don't blame me if you come back for another look. 😉🔥 @bigboori",
-"This deserves a permanent spot in your favorites. 😍❤️ @bigboori",
-"That kind of confidence is dangerously attractive. 😏🔥 @bigboori",
-"Your eyes definitely weren't ready for this. 👀💋 @bigboori",
-"Just when you thought your feed couldn't get better… 😮‍💨🔥 @bigboori",
-"Somebody brought the heat today. 🥵❤️ @bigboori",
-"This is almost unfair to the rest of the timeline. 😏🔥 @bigboori",
-"Tell your scrolling finger to take a break. 😉👀 @bigboori",
-"Beauty with a little attitude hits different. 😍🔥 @bigboori",
-"This picture knows exactly what it's doing. 😏💋 @bigboori",
-"Not every distraction is a bad thing. 👀❤️ @bigboori",
-"The timeline just got a little hotter. 🔥😮‍💨 @bigboori",
-"Your favorite notification just arrived. 😉🔥 @bigboori",
-"Somebody clearly woke up feeling dangerous. 😈❤️ @bigboori",
-"Looking this good should require a license. 😏🔥 @bigboori",
-"I'd say don't stare… but who am I kidding? 👀😍 @bigboori",
-"This is what stopping the scroll looks like. 🔥😉 @bigboori",
-"Consider this your daily dose of temptation. 😏💋 @bigboori",
-"One glance and suddenly it's your new favorite post. 👀❤️ @bigboori",
-"Too much beauty in one frame. 😮‍💨🔥 @bigboori",
-"The camera caught something special today. 😍👀 @bigboori",
-"Somebody is making scrolling very difficult. 😏🔥 @bigboori",
-"That look deserves its own fan club. 😉❤️ @bigboori",
-"This post came with absolutely no warning. 🚨🔥 @bigboori",
-"Your feed just got a little more dangerous. 😈👀 @bigboori",
-"Can't decide what's better: the confidence or the view. 😏😍 @bigboori",
-"Your eyes can thank me later. 😉🔥 @bigboori",
-"This is why we can't have boring timelines. 😮‍💨❤️ @bigboori",
-"Absolutely unfair to everyone trying to concentrate. 👀🔥 @bigboori",
-"Somebody forgot to turn down the charm. 😏💋 @bigboori",
-"This is your reminder that confidence is attractive. 🔥❤️ @bigboori",
-"Just casually stealing everyone's attention. 👀😍 @bigboori",
-"Scroll responsibly… if that's even possible. 😏🔥 @bigboori",
-"The kind of post that makes you forget what you were looking for. 😮‍💨👀 @bigboori",
-"One second turned into a full appreciation session. 😂🔥 @bigboori",
-"This view deserves VIP treatment. 😏❤️ @bigboori",
-"Your algorithm finally did something right. 👀🔥 @bigboori",
-"Someone definitely understood the assignment. 😍💋 @bigboori",
-"Too stunning to be just another post. 😮‍💨❤️ @bigboori",
-"Don't pretend you didn't stop scrolling. 😉🔥 @bigboori",
-"This picture has serious main-character energy. 👀😍 @bigboori",
-"Beauty, confidence, and a little trouble. 😈🔥 @bigboori",
-"Your eyes just found their favorite corner of the internet. 😏❤️ @bigboori",
-"Some pictures deserve to be admired slowly. 👀🔥 @bigboori",
-"Now that's how you make an entrance. 😮‍💨😍 @bigboori",
-"Your timeline needed this little distraction. 😉💋 @bigboori",
-"This is the kind of view you don't forget. 🔥❤️ @bigboori",
-"Somebody came prepared to steal the spotlight. 😏👀 @bigboori",
-"Too much attitude for one frame. 😈🔥 @bigboori",
-"That confidence is doing all the flirting. 😉❤️ @bigboori",
-"I think we found today's favorite post. 😍🔥 @bigboori",
-"This picture deserves more than one look. 👀💋 @bigboori",
-"Don't rush… enjoy the view. 😏🔥 @bigboori",
-"Your scroll break starts right here. 😮‍💨❤️ @bigboori",
-"The definition of impossible to ignore. 👀🔥 @bigboori",
-"Somebody just made the internet a little prettier. 😍❤️ @bigboori",
-"Confidence looks dangerously good from here. 😏🔥 @bigboori",
-"This post has no business being this attractive. 👀💋 @bigboori",
-"Your eyes are officially distracted. 😉🔥 @bigboori",
-"A little beauty for your timeline. 😮‍💨❤️ @bigboori",
-"Who needs a caption when the picture says everything? 😏👀 @bigboori",
-"This one deserves a double tap and a second look. 🔥😍 @bigboori",
-"Your feed just found its new favorite distraction. 😉❤️ @bigboori",
-"Keep scrolling if you can… I don't think you can. 😏🔥 @bigboori",
-"That smile, that confidence, that whole vibe. 😍💋 @bigboori",
-"Today's forecast: 100% chance of distraction. 🥵🔥 @bigboori",
-"Proof that confidence can be seriously attractive. 😏❤️ @bigboori",
-"One picture. One problem. You can't stop looking. 👀🔥 @bigboori",
-"Welcome to the part of your feed you won't forget. 😮‍💨😍 @bigboori",
-"Some views are worth getting lost in. 😏❤️ @bigboori",
-"Your daily reminder to appreciate a beautiful view. 👀🔥 @bigboori",
-"Okay… who allowed this much beauty on my timeline? 😍🔥 @bigboori",
+# ============================================================
+# 50 TRUTHS
+# ============================================================
+
+TRUTHS = [
+    "Who is the most attractive person you've ever had a crush on?",
+    "Have you ever secretly liked a friend?",
+    "Who was your last crush?",
+    "What's the first thing you notice about someone you're attracted to?",
+    "Have you ever flirted with someone to make someone else jealous?",
+    "What's your biggest weakness when you like someone?",
+    "Have you ever liked someone who didn't know?",
+    "Would you date someone your best friend used to like?",
+    "What's the boldest move you've ever made on a crush?",
+    "Have you ever pretended not to like someone when you actually did?",
+    "Who was the last person who made your heart beat faster?",
+    "What's your biggest dating red flag?",
+    "What's your biggest green flag?",
+    "Have you ever fallen for someone unexpectedly?",
+    "Would you choose looks or personality?",
+    "What's your ideal first date?",
+    "Have you ever repeatedly checked the profile of someone you liked?",
+    "What's the most attractive personality trait?",
+    "Have you ever sent a message and immediately regretted it?",
+    "Who was the last person you wanted to impress?",
+    "Would you date someone outside your usual type?",
+    "What's the most romantic thing someone could do for you?",
+    "Have you ever had a crush on someone unavailable?",
+    "What's the longest you've secretly liked someone?",
+    "Have you ever flirted through texting but acted shy in person?",
+    "What's the most attractive thing someone can wear?",
+    "Have you ever caught feelings after saying you wouldn't?",
+    "Would you make the first move or wait?",
+    "What's your favorite kind of compliment?",
+    "Have you ever reread an old conversation with someone you liked?",
+    "Who would you want to receive a surprise date invitation from?",
+    "What instantly makes someone more attractive?",
+    "Have you ever dressed extra well because your crush was there?",
+    "Would you date your exact opposite?",
+    "What's the most embarrassing thing you've done because you liked someone?",
+    "Have you ever gotten jealous even though you weren't dating?",
+    "What's your favorite flirting style?",
+    "Have you ever practiced what to say before talking to your crush?",
+    "What makes you lose interest in someone immediately?",
+    "Would you rather receive flowers or a surprise date?",
+    "Have you ever intentionally waited before replying to someone you liked?",
+    "What's your dream date location?",
+    "Have you ever liked someone your friends warned you about?",
+    "What's more attractive: confidence or shyness?",
+    "Have you ever had chemistry with someone you barely knew?",
+    "What's one thing you'd want your future partner to understand?",
+    "Would you rather make the first move or be surprised?",
+    "What's the sweetest thing someone has ever said to you?",
+    "If you could go on a date with anyone you know, who would you choose?",
 ]
 
-def load_db():
-    if not DB_FILE.exists():
-        return {"photos": [], "posted": []}
-    try:
-        return json.loads(DB_FILE.read_text())
-    except Exception:
-        return {"photos": [], "posted": []}
+# ============================================================
+# 50 DARES
+# ============================================================
 
-def save_db(db):
-    tmp = DB_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(db))
-    tmp.replace(DB_FILE)
+DARES = [
+    "Give someone your best pickup line.",
+    "Send a cute selfie to someone you trust.",
+    "Give another player a genuine compliment.",
+    "Tell someone: 'Be honest... would you date me? 👀'",
+    "Describe your ideal partner without saying their name.",
+    "Send someone your favorite flirty emoji combination.",
+    "Rate someone's flirting skills out of 10.",
+    "Send a voice message saying your best pickup line.",
+    "Tell the group your first impression of your crush.",
+    "Change your profile picture to your best dressed-up photo for 10 minutes.",
+    "Write a cheesy romantic message for someone.",
+    "Tell someone what you find most attractive about their personality.",
+    "Send someone: 'I have a question for you 👀'",
+    "Give someone a ridiculous romantic nickname.",
+    "Describe your perfect date in three sentences.",
+    "Send your best non-explicit selfie to someone.",
+    "Give someone your best celebrity-style introduction.",
+    "Tell the group what your dream partner looks like.",
+    "Write a pickup line using someone's name.",
+    "Send someone three heart emojis.",
+    "Tell someone one thing that makes them attractive.",
+    "Record a 5-second voice message saying 'I think you're cute.'",
+    "Let someone choose your status for 10 minutes.",
+    "Give someone a dramatic romance-movie compliment.",
+    "Tell the group your most embarrassing crush story.",
+    "Send a selfie making your best confident expression.",
+    "Give someone your best first-date invitation.",
+    "Describe your ideal first date with someone in the chat.",
+    "Send someone 'We need to talk 👀' and then reveal it's a dare.",
+    "Rate someone's sense of humor out of 10.",
+    "Tell the group three things you find attractive.",
+    "Send your favorite romantic emoji combination.",
+    "Give someone a compliment without mentioning appearance.",
+    "Pretend to propose to someone for 10 seconds.",
+    "Create a fake dating-app bio for yourself.",
+    "Send a voice message introducing yourself as someone's future date.",
+    "Tell the group your most attractive quality.",
+    "Give someone a cheesy movie-style compliment.",
+    "Send someone: 'Quick question... what's your type? 👀'",
+    "Let someone choose one harmless emoji for your next five messages.",
+    "Describe your perfect partner using five words.",
+    "Give someone a playful compliment.",
+    "Tell the group what would instantly make you interested in someone.",
+    "Send a selfie with your best smile.",
+    "Give someone a fake award for having the best personality.",
+    "Tell someone their best quality.",
+    "Make up a romantic movie title about you and your crush.",
+    "Send a voice message saying your most dramatic love confession.",
+    "Tell the group your dream date activity.",
+    "Give someone your best harmless flirting attempt.",
+]
 
-async def collect_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.channel_post
-    if not msg or msg.chat_id != SOURCE_CHANNEL_ID or not msg.photo:
-        return
+# ============================================================
+# PRIVATE GAME STORAGE
+# ============================================================
 
-    # Telegram gives the highest-resolution photo as the last item.
-    file_id = msg.photo[-1].file_id
-    db = load_db()
+games = {}
 
-    if not any(p["file_id"] == file_id for p in db["photos"]):
-        db["photos"].append({
-            "file_id": file_id,
-            "source_message_id": msg.message_id
-        })
-        save_db(db)
-        print(f"Saved new photo {msg.message_id}. Total: {len(db['photos'])}")
 
-async def post_one(context: ContextTypes.DEFAULT_TYPE):
-    db = load_db()
-    photos = db["photos"]
-    posted = set(db.get("posted", []))
+def create_game():
+    code = secrets.token_urlsafe(6)
 
-    available = [p for p in photos if p["file_id"] not in posted]
+    games[code] = {
+        "girl": None,
+        "boy": None,
+        "turn": None,
+        "round": 0,
+        "active": False,
+    }
 
-    # Start a new cycle when every saved photo has been posted.
-    if not available:
-        posted = set()
-        available = photos
+    return code
 
-    if not available:
-        print("No photos collected yet.")
-        return
 
-    item = random.choice(available)
-    caption = random.choice(CAPTIONS)
+# ============================================================
+# PRIVATE GAME
+# ============================================================
 
-    try:
-        await context.bot.send_photo(
-            chat_id=TARGET_CHANNEL,
-            photo=item["file_id"],
-            caption=caption
-        )
-        posted.add(item["file_id"])
-        db["posted"] = list(posted)
-        save_db(db)
-        print("Posted a photo.")
-    except Exception as e:
-        print(f"Posting error: {e}")
+def main_menu():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "🎮 CREATE 1-ON-1 GAME",
+                callback_data="create"
+            )
+        ]
+    ])
 
-async def startup(context: ContextTypes.DEFAULT_TYPE):
-    # Post immediately on first run, then every hour.
-    await post_one(context)
 
-def main():
-    token = os.environ["BOT_TOKEN"]
+def role_keyboard(code):
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "👩 GIRL",
+                callback_data=f"role:g:{code}"
+            ),
+            InlineKeyboardButton(
+                "👨 BOY",
+                callback_data=f"role:b:{code}"
+            ),
+        ]
+    ])
 
-    app = (
-        Application.builder()
-        .token(token)
-        .build()
+
+def challenge_keyboard(code):
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "😈 TRUTH",
+                callback_data=f"truth:{code}"
+            ),
+            InlineKeyboardButton(
+                "🔥 DARE",
+                callback_data=f"dare:{code}"
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                "🎲 RANDOM",
+                callback_data=f"random:{code}"
+            ),
+            InlineKeyboardButton(
+                "🔄 NEXT",
+                callback_data=f"next:{code}"
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                "✅ DONE",
+                callback_data=f"done:{code}"
+            )
+        ],
+    ])
+
+
+# ============================================================
+# /START
+# ============================================================
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    # Handle deep-link:
+    # /start GAMECODE
+
+    if context.args:
+
+        code = context.args[0]
+
+        if code in games:
+
+            game = games[code]
+
+            await update.message.reply_text(
+                "🔥 *YOU'VE BEEN INVITED!*\n\n"
+                "Choose your role:",
+                parse_mode="Markdown",
+                reply_markup=role_keyboard(code),
+            )
+
+            return
+
+    await update.message.reply_text(
+        "🔥 *NAUGHTY TRUTH OR DARE* 🔥\n\n"
+        "👩 Girl vs 👨 Boy\n"
+        "😈 Truth\n"
+        "🔥 Dare\n"
+        "🎲 Random\n\n"
+        "Create a private 1-on-1 game.",
+        parse_mode="Markdown",
+        reply_markup=main_menu(),
     )
 
-    # Channel posts are delivered to bots that are administrators of the source channel.
-    app.add_handler(
-        MessageHandler(filters.UpdateType.CHANNEL_POST & filters.PHOTO, collect_photo)
-    )
 
-    app.job_queue.run_once(startup, when=5)
-    app.job_queue.run_repeating(post_one, interval=POST_INTERVAL, first=POST_INTERVAL)
+# ============================================================
+# INLINE MODE
+# ============================================================
 
-    print("BigBoori poster is running.")
-    app.run_polling(allowed_updates=["channel_post"])
+async def inline_query(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
-if __name__ == "__main__":
-    main()
+    query = update.inline_query.query.strip().lower()
+
+    results = []
+
+    if query in ["", "random", "r"]:
+
+        # Random results
+        for i in range(5):
+
+            if random.choice([True, False]):
+
+                text = (
+                    "😈 TRUTH\n\n"
+                    + random.choice(TRUTHS)
+                )
+
+else:
