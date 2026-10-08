@@ -1,126 +1,577 @@
 import os
 import json
 import random
-import asyncio
 from pathlib import Path
-from telegram import Update, Bot
-from telegram.ext import Application, ContextTypes, MessageHandler, filters
+
+from telegram import Update
+from telegram.ext import (
+    Application,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
+
+# ============================================================
+# SETTINGS
+# ============================================================
+
+BOT_TOKEN = os.environ["BOT_TOKEN"]
 
 SOURCE_CHANNEL_ID = int(os.environ["SOURCE_CHANNEL_ID"])
-TARGET_CHANNEL = os.environ.get("TARGET_CHANNEL", "@bigboori")
-POST_INTERVAL = 3600
+
+TARGET_CHANNEL = os.environ.get(
+    "TARGET_CHANNEL",
+    "@bigboori"
+)
+
+# ============================================================
+# POST EVERY 1 HOUR
+# ============================================================
+
+POST_INTERVAL = 60 * 60  # 3600 seconds = 1 hour
+
+
+# ============================================================
+# DATABASE
+# ============================================================
+
 DATA_DIR = Path("/data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+
 DB_FILE = DATA_DIR / "photos.json"
 
+
+# ============================================================
+# 100 SPICY / SAVAGE QUOTES
+# ============================================================
+
 CAPTIONS = [
-    "Curves doing all the talking. 👀🔥 @bigboori",
-    "That view deserves a second look. 😮‍💨 @bigboori",
-    "Just casually stealing the spotlight. 👀🔥 @bigboori",
-    "Confidence looks good from every angle. 🔥 @bigboori",
-    "The view is definitely worth stopping for. 👀 @bigboori",
-    "A little reminder that curves never go unnoticed. 😮‍💨 @bigboori",
-    "Serving looks without saying a word. 🔥 @bigboori",
-    "Some pictures simply demand a second look. 👀 @bigboori",
-    "Main character energy. 🔥 @bigboori",
-    "The kind of post that makes you pause the scroll. 👀 @bigboori",
-    "No explanation needed. Just enjoy the view. 😮‍💨 @bigboori",
-    "Scroll carefully… you might miss the best part. 👀🔥 @bigboori",
-    "Too much confidence for one picture. 🔥 @bigboori",
-    "Consider this your sign to stop scrolling. 👀 @bigboori",
-    "A whole lot of attitude in one frame. 😮‍💨🔥 @bigboori",
-    "Curves and confidence — dangerous combination. 👀 @bigboori",
-    "Definitely not an ordinary scroll. 🔥 @bigboori",
-    "The timeline just got a little more interesting. 👀 @bigboori",
-    "Serving a look from every angle. 😮‍💨 @bigboori",
-    "One picture, zero words needed. 👀🔥 @bigboori",
+
+    "Pretty face. Dangerous curves. Bad intentions. 🖤",
+
+    "You looked once. That was your first mistake. 😏",
+
+    "Not a thirst trap. A whole drought. 🔥",
+
+    "Your self-control just left the chat. 👀",
+
+    "Handle with caution. Curves have consequences.",
+
+    "Sweet smile, savage energy. 😈",
+
+    "I'm not responsible for where your eyes wander.",
+
+    "Too much curve for a quiet entrance. 🔥",
+
+    "Your favorite distraction has entered the room. 👀",
+
+    "Don't stare too long. You might get attached. 😏",
+
+    "Confidence looks better from this angle. 🔥",
+
+    "I came to ruin your scrolling.",
+
+    "Your weakness has a silhouette. 🖤",
+
+    "Some views deserve absolutely no explanation.",
+
+    "Caught you looking. Again. 👀",
+
+    "Beautiful enough to tempt, savage enough to disappear.",
+
+    "Your screen time is about to become embarrassing. 😏",
+
+    "A little evil, a lot of curves. 😈",
+
+    "You weren't ready for this timeline. 🔥",
+
+    "The kind of distraction you secretly wanted.",
+
+    "No warning label was going to save you. 🖤",
+
+    "Curves sharper than my attitude.",
+
+    "Scroll away. I dare you. 👀",
+
+    "Your eyes have expensive taste. 😏",
+
+    "I don't chase attention. I collect it. 🔥",
+
+    "Serving looks with a side of trouble. 😈",
+
+    "You can blame the algorithm.",
+
+    "Too confident to be ignored. 🖤",
+
+    "A dangerous amount of pretty. 🔥",
+
+    "Your favorite bad decision looks like this.",
+
+    "One post closer to losing your focus. 👀",
+
+    "Keep staring. I know you want to. 😏",
+
+    "Cute enough to distract, savage enough to haunt.",
+
+    "This is what 'handle with care' looks like. 🖤",
+
+    "No caption can compete with the view.",
+
+    "Your patience deserves a challenge. 🔥",
+
+    "A little mystery makes the curves hit harder.",
+
+    "I'm the reason you forgot why you opened the app. 👀",
+
+    "Not everyone deserves this view.",
+
+    "Eyes up... if you can manage it. 😏",
+
+    "Your attention has officially been stolen.",
+
+    "Curves with criminal intentions. 🔥",
+
+    "I bring the trouble. The curves bring the witnesses. 😈",
+
+    "Danger never looked this comfortable.",
+
+    "You're staring like there's a prize. 👀",
+
+    "Your feed just got a lot more interesting.",
+
+    "Too bold for boring timelines. 🖤",
+
+    "This post comes with zero regrets.",
+
+    "Call it temptation. I call it confidence. 🔥",
+
+    "I don't need an introduction. The silhouette says enough.",
+
+    "You can scroll, but you'll probably come back. 😏",
+
+    "Built to be remembered.",
+
+    "A little toxic, a lot unforgettable. 🖤",
+
+    "Your eyes already picked a favorite.",
+
+    "Not here to behave. 😈",
+
+    "The kind of post that makes 'just one look' impossible.",
+
+    "Dark energy. Soft smile. Dangerous curves. 🔥",
+
+    "Your attention span never stood a chance.",
+
+    "Some people bring flowers. I bring distractions. 👀",
+
+    "The camera knew exactly what it was doing.",
+
+    "You call it a thirst trap. I call it advertising. 😏",
+
+    "Too much attitude to be innocent.",
+
+    "Look again. I know you did. 👀",
+
+    "A masterpiece with questionable intentions. 🖤",
+
+    "I'm not your type. I'm your exception.",
+
+    "Your weakness just posted again. 🔥",
+
+    "Beautiful chaos, perfectly framed.",
+
+    "The scroll was peaceful before I arrived.",
+
+    "No permission needed to steal the spotlight. 😈",
+
+    "This much confidence should be illegal. 🔥",
+
+    "I leave impressions, not explanations.",
+
+    "You wanted a sign. Here it is. 👀",
+
+    "The view is dangerous after midnight. 🖤",
+
+    "If temptation had a profile picture...",
+
+    "Don't blame me for your imagination. 😏",
+
+    "Your curiosity brought you here. Your eyes kept you here.",
+
+    "A little wicked never hurt anybody. 😈",
+
+    "The kind of pretty that causes problems. 🔥",
+
+    "Your favorite distraction is becoming a habit.",
+
+    "I'm the plot twist your feed needed. 🖤",
+
+    "Too hot for a boring caption. 🔥",
+
+    "Some silhouettes speak louder than words.",
+
+    "You can pretend you're not impressed. 👀",
+
+    "Confidence: dangerously high. 😏",
+
+    "I don't compete. I make comparisons unfair.",
+
+    "The camera caught what the mirror already knew.",
+
+    "Your attention looks good on me. 🔥",
+
+    "A bad influence with excellent curves. 😈",
+
+    "Don't get comfortable. I'm just getting started.",
+
+    "You found the post you weren't supposed to find. 👀",
+
+    "Curves, confidence, and questionable decisions.",
+
+    "Your feed just caught a felony of beauty. 🖤",
+
+    "I could explain the obsession, but the picture already did.",
+
+    "Stay curious. Stay distracted. 😏",
+
+    "Pretty enough to stop traffic. Savage enough to keep it moving.",
+
+    "You came for one post. Good luck leaving. 🔥",
+
+    "The warning was hidden in the curves.",
+
+    "Consider this your final excuse to stare. 🖤🍑",
 ]
 
+
+# ============================================================
+# LOAD DATABASE
+# ============================================================
+
 def load_db():
+
     if not DB_FILE.exists():
-        return {"photos": [], "posted": []}
+
+        return {
+            "photos": [],
+            "posted": []
+        }
+
     try:
-        return json.loads(DB_FILE.read_text())
-    except Exception:
-        return {"photos": [], "posted": []}
+
+        return json.loads(
+            DB_FILE.read_text()
+        )
+
+    except Exception as error:
+
+        print(
+            f"Database error: {error}"
+        )
+
+        return {
+            "photos": [],
+            "posted": []
+        }
+
+
+# ============================================================
+# SAVE DATABASE
+# ============================================================
 
 def save_db(db):
-    tmp = DB_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(db))
-    tmp.replace(DB_FILE)
 
-async def collect_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.channel_post
-    if not msg or msg.chat_id != SOURCE_CHANNEL_ID or not msg.photo:
+    temp_file = DB_FILE.with_suffix(
+        ".tmp"
+    )
+
+    temp_file.write_text(
+        json.dumps(
+            db,
+            indent=2
+        )
+    )
+
+    temp_file.replace(
+        DB_FILE
+    )
+
+
+# ============================================================
+# COLLECT PHOTOS
+# ============================================================
+
+async def collect_photo(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    message = update.channel_post
+
+    if not message:
         return
 
-    # Telegram gives the highest-resolution photo as the last item.
-    file_id = msg.photo[-1].file_id
+    if message.chat_id != SOURCE_CHANNEL_ID:
+        return
+
+    if not message.photo:
+        return
+
+    # Highest-resolution version
+    file_id = message.photo[-1].file_id
+
     db = load_db()
 
-    if not any(p["file_id"] == file_id for p in db["photos"]):
-        db["photos"].append({
+    existing_ids = {
+        photo["file_id"]
+        for photo in db["photos"]
+    }
+
+    # Don't save duplicates
+    if file_id in existing_ids:
+        return
+
+    db["photos"].append(
+        {
             "file_id": file_id,
-            "source_message_id": msg.message_id
-        })
-        save_db(db)
-        print(f"Saved new photo {msg.message_id}. Total: {len(db['photos'])}")
+            "source_message_id": message.message_id
+        }
+    )
 
-async def post_one(context: ContextTypes.DEFAULT_TYPE):
+    save_db(db)
+
+    print(
+        f"PHOTO SAVED | "
+        f"Message: {message.message_id} | "
+        f"Total: {len(db['photos'])}"
+    )
+
+
+# ============================================================
+# POST ONE PHOTO
+# ============================================================
+
+async def post_one(
+    context: ContextTypes.DEFAULT_TYPE
+):
+
     db = load_db()
-    photos = db["photos"]
-    posted = set(db.get("posted", []))
 
-    available = [p for p in photos if p["file_id"] not in posted]
+    photos = db.get(
+        "photos",
+        []
+    )
 
-    # Start a new cycle when every saved photo has been posted.
+    posted = set(
+        db.get(
+            "posted",
+            []
+        )
+    )
+
+    if not photos:
+
+        print(
+            "NO PHOTOS AVAILABLE"
+        )
+
+        return
+
+    # Find photos that haven't
+    # been posted during this cycle
+    available = [
+        photo
+        for photo in photos
+        if photo["file_id"] not in posted
+    ]
+
+    # Start a new cycle
     if not available:
+
+        print(
+            "ALL PHOTOS POSTED."
+        )
+
+        print(
+            "STARTING NEW PHOTO CYCLE."
+        )
+
         posted = set()
+
         available = photos
 
-    if not available:
-        print("No photos collected yet.")
-        return
+    # Pick random photo
+    selected_photo = random.choice(
+        available
+    )
 
-    item = random.choice(available)
-    caption = random.choice(CAPTIONS)
+    # Pick random caption
+    caption = random.choice(
+        CAPTIONS
+    )
 
     try:
+
         await context.bot.send_photo(
             chat_id=TARGET_CHANNEL,
-            photo=item["file_id"],
+            photo=selected_photo["file_id"],
             caption=caption
         )
-        posted.add(item["file_id"])
-        db["posted"] = list(posted)
-        save_db(db)
-        print("Posted a photo.")
-    except Exception as e:
-        print(f"Posting error: {e}")
 
-async def startup(context: ContextTypes.DEFAULT_TYPE):
-    # Post immediately on first run, then every hour.
-    await post_one(context)
+        # Save as posted
+        posted.add(
+            selected_photo["file_id"]
+        )
+
+        db["posted"] = list(
+            posted
+        )
+
+        save_db(db)
+
+        print(
+            "================================"
+        )
+
+        print(
+            "PHOTO POSTED SUCCESSFULLY"
+        )
+
+        print(
+            "NEXT POST: IN 60 MINUTES"
+        )
+
+        print(
+            "================================"
+        )
+
+    except Exception as error:
+
+        print(
+            f"POSTING ERROR: {error}"
+        )
+
+
+# ============================================================
+# STARTUP POST
+# ============================================================
+
+async def startup_post(
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    print(
+        "Startup post..."
+    )
+
+    await post_one(
+        context
+    )
+
+
+# ============================================================
+# MAIN
+# ============================================================
 
 def main():
-    token = os.environ["BOT_TOKEN"]
 
-    app = (
+    print(
+        "================================"
+    )
+
+    print(
+        "BIGBOORI PHOTO BOT"
+    )
+
+    print(
+        "================================"
+    )
+
+    print(
+        "Target:",
+        TARGET_CHANNEL
+    )
+
+    print(
+        "Interval: 60 MINUTES"
+    )
+
+    print(
+        "Interval seconds:",
+        POST_INTERVAL
+    )
+
+    print(
+        "================================"
+    )
+
+    application = (
         Application.builder()
-        .token(token)
+        .token(BOT_TOKEN)
         .build()
     )
 
-    # Channel posts are delivered to bots that are administrators of the source channel.
-    app.add_handler(
-        MessageHandler(filters.UpdateType.CHANNEL_POST & filters.PHOTO, collect_photo)
+    # --------------------------------------------------------
+    # SOURCE CHANNEL LISTENER
+    # --------------------------------------------------------
+
+    application.add_handler(
+        MessageHandler(
+            filters.UpdateType.CHANNEL_POST
+            & filters.PHOTO,
+            collect_photo
+        )
     )
 
-    app.job_queue.run_once(startup, when=5)
-    app.job_queue.run_repeating(post_one, interval=POST_INTERVAL, first=POST_INTERVAL)
+    # --------------------------------------------------------
+    # FIRST POST
+    # --------------------------------------------------------
+    #
+    # Posts 5 seconds after bot starts.
+    #
 
-    print("BigBoori poster is running.")
-    app.run_polling(allowed_updates=["channel_post"])
+    application.job_queue.run_once(
+        startup_post,
+        when=5
+    )
+
+    # --------------------------------------------------------
+    # EVERY 1 HOUR
+    # --------------------------------------------------------
+    #
+    # 60 * 60 = 3600 seconds
+    #
+
+    application.job_queue.run_repeating(
+        post_one,
+        interval=60 * 60,
+        first=60 * 60
+    )
+
+    print(
+        "BOT IS RUNNING."
+    )
+
+    print(
+        "Posting every 60 minutes."
+    )
+
+    # --------------------------------------------------------
+    # START
+    # --------------------------------------------------------
+
+    application.run_polling(
+        allowed_updates=[
+            "channel_post"
+        ]
+    )
+
+
+# ============================================================
+# RUN BOT
+# ============================================================
 
 if __name__ == "__main__":
+
     main()
