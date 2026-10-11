@@ -1,9 +1,13 @@
+
 import os
 import json
 import random
 from pathlib import Path
+from io import BytesIO
 
+from PIL import Image, ImageDraw, ImageFont
 from telegram import Update
+from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
     ContextTypes,
@@ -19,7 +23,12 @@ BOT_TOKEN = os.environ["BOT_TOKEN"]
 SOURCE_CHANNEL_ID = int(os.environ["SOURCE_CHANNEL_ID"])
 TARGET_CHANNEL = os.environ.get("TARGET_CHANNEL", "@bigboori")
 
-POST_INTERVAL = 2 * 60 * 60  # Every 2 hours
+POST_INTERVAL = 2 * 60 * 60  # 2 hours
+CHANNEL_URL = "https://t.me/bigboori"
+CAPTION = f'<a href="{CHANNEL_URL}">βΟΟTΨҒUL</a>'
+
+# Watermark opacity: 0 is invisible, 255 is fully opaque
+WATERMARK_OPACITY = 45
 
 # ============================================================
 # DATABASE
@@ -51,112 +60,65 @@ def save_db(db):
 
 
 # ============================================================
-# CAPTIONS
+# WATERMARK
 # ============================================================
 
-CAPTIONS = [
-    "Pretty face. Dangerous curves. Bad intentions. 🖤",
-    "You looked once. That was your first mistake. 😏",
-    "Not a thirst trap. A whole drought. 🔥",
-    "Your self-control just left the chat. 👀",
-    "Handle with caution. Curves have consequences.",
-    "Sweet smile, savage energy. 😈",
-    "I'm not responsible for where your eyes wander.",
-    "Too much curve for a quiet entrance. 🔥",
-    "Your favorite distraction has entered the room. 👀",
-    "Don't stare too long. You might get attached. 😏",
-    "Confidence looks better from this angle. 🔥",
-    "I came to ruin your scrolling.",
-    "Your weakness has a silhouette. 🖤",
-    "Some views deserve absolutely no explanation.",
-    "Caught you looking. Again. 👀",
-    "Beautiful enough to tempt, savage enough to disappear.",
-    "Your screen time is about to become embarrassing. 😏",
-    "A little evil, a lot of curves. 😈",
-    "You weren't ready for this timeline. 🔥",
-    "The kind of distraction you secretly wanted.",
-    "No warning label was going to save you. 🖤",
-    "Curves sharper than my attitude.",
-    "Scroll away. I dare you. 👀",
-    "Your eyes have expensive taste. 😏",
-    "I don't chase attention. I collect it. 🔥",
-    "Serving looks with a side of trouble. 😈",
-    "You can blame the algorithm.",
-    "Too confident to be ignored. 🖤",
-    "A dangerous amount of pretty. 🔥",
-    "Your favorite bad decision looks like this.",
-    "One post closer to losing your focus. 👀",
-    "Keep staring. I know you want to. 😏",
-    "Cute enough to distract, savage enough to haunt.",
-    "This is what 'handle with care' looks like. 🖤",
-    "No caption can compete with the view.",
-    "Your patience deserves a challenge. 🔥",
-    "A little mystery makes the curves hit harder.",
-    "I'm the reason you forgot why you opened the app. 👀",
-    "Not everyone deserves this view.",
-    "Eyes up... if you can manage it. 😏",
-    "Your attention has officially been stolen.",
-    "Curves with criminal intentions. 🔥",
-    "I bring the trouble. The curves bring the witnesses. 😈",
-    "Danger never looked this comfortable.",
-    "You're staring like there's a prize. 👀",
-    "Your feed just got a lot more interesting.",
-    "Too bold for boring timelines. 🖤",
-    "This post comes with zero regrets.",
-    "Call it temptation. I call it confidence. 🔥",
-    "I don't need an introduction. The silhouette says enough.",
-    "You can scroll, but you'll probably come back. 😏",
-    "Built to be remembered.",
-    "A little toxic, a lot unforgettable. 🖤",
-    "Your eyes already picked a favorite.",
-    "Not here to behave. 😈",
-    "The kind of post that makes 'just one look' impossible.",
-    "Dark energy. Soft smile. Dangerous curves. 🔥",
-    "Your attention span never stood a chance.",
-    "Some people bring flowers. I bring distractions. 👀",
-    "The camera knew exactly what it was doing.",
-    "You call it a thirst trap. I call it advertising. 😏",
-    "Too much attitude to be innocent.",
-    "Look again. I know you did. 👀",
-    "A masterpiece with questionable intentions. 🖤",
-    "I'm not your type. I'm your exception.",
-    "Your weakness just posted again. 🔥",
-    "Beautiful chaos, perfectly framed.",
-    "The scroll was peaceful before I arrived.",
-    "No permission needed to steal the spotlight. 😈",
-    "This much confidence should be illegal. 🔥",
-    "I leave impressions, not explanations.",
-    "You wanted a sign. Here it is. 👀",
-    "The view is dangerous after midnight. 🖤",
-    "If temptation had a profile picture...",
-    "Don't blame me for your imagination. 😏",
-    "Your curiosity brought you here. Your eyes kept you here.",
-    "A little wicked never hurt anybody. 😈",
-    "The kind of pretty that causes problems. 🔥",
-    "Your favorite distraction is becoming a habit.",
-    "I'm the plot twist your feed needed. 🖤",
-    "Too hot for a boring caption. 🔥",
-    "Some silhouettes speak louder than words.",
-    "You can pretend you're not impressed. 👀",
-    "Confidence: dangerously high. 😏",
-    "I don't compete. I make comparisons unfair.",
-    "The camera caught what the mirror already knew.",
-    "Your attention looks good on me. 🔥",
-    "A bad influence with excellent curves. 😈",
-    "Don't get comfortable. I'm just getting started.",
-    "You found the post you weren't supposed to find. 👀",
-    "Curves, confidence, and questionable decisions.",
-    "Your feed just caught a felony of beauty. 🖤",
-    "I could explain the obsession, but the picture already did.",
-    "Stay curious. Stay distracted. 😏",
-    "Pretty enough to stop traffic. Savage enough to keep it moving.",
-    "You came for one post. Good luck leaving. 🔥",
-    "The warning was hidden in the curves.",
-    "Consider this your final excuse to stare. 🖤🍑",
-]
+def add_watermark(image_bytes):
+    with Image.open(BytesIO(image_bytes)) as original:
+        image = original.convert("RGBA")
+
+    width, height = image.size
+
+    # Scale watermark to image dimensions
+    font_size = max(12, min(30, width // 30, height // 30))
+
+    try:
+        font = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            font_size,
+        )
+    except OSError:
+        font = ImageFont.load_default()
+
+    overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+
+    text = "@bigboori"
+    bbox = draw.textbbox((0, 0), text, font=font)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+
+    margin = max(10, width // 40)
+
+    x = max(margin, width - text_width - margin)
+    y = max(margin, height - text_height - margin)
+
+    # Subtle white watermark at lower-right
+    draw.text(
+        (x, y),
+        text,
+        font=font,
+        fill=(255, 255, 255, WATERMARK_OPACITY),
+        stroke_width=0,
+    )
+
+    result = Image.alpha_composite(image, overlay)
+
+    output = BytesIO()
+    result.convert("RGB").save(
+        output,
+        format="JPEG",
+        quality=95,
+        optimize=True,
+    )
+    output.seek(0)
+    output.name = "bigboori_watermarked.jpg"
+
+    return output
+
 
 # ============================================================
-# COLLECT NEW PHOTOS FROM SOURCE CHANNEL
+# COLLECT NEW PHOTOS
 # ============================================================
 
 async def collect_photo(
@@ -190,12 +152,12 @@ async def collect_photo(
 
     print(
         f"Saved new photo: {message.message_id} | "
-        f"Total photos: {len(db['photos'])}"
+        f"Total: {len(db['photos'])}"
     )
 
 
 # ============================================================
-# POST ONE RANDOM PHOTO
+# POST ONE WATERMARKED PHOTO
 # ============================================================
 
 async def post_one(context: ContextTypes.DEFAULT_TYPE):
@@ -212,27 +174,44 @@ async def post_one(context: ContextTypes.DEFAULT_TYPE):
         if photo["file_id"] not in posted
     ]
 
-    # Start a new cycle after every photo has been used
+    # Start another cycle after all photos are used
     if not available:
         print("All photos posted. Starting a new cycle.")
         posted.clear()
         available = photos
 
     selected = random.choice(available)
-    caption = random.choice(CAPTIONS)
 
     try:
+        # Download original photo from Telegram
+        telegram_file = await context.bot.get_file(
+            selected["file_id"]
+        )
+
+        original_bytes = BytesIO()
+        await telegram_file.download_to_memory(
+            out=original_bytes
+        )
+
+        # Add subtle watermark
+        watermarked_photo = add_watermark(
+            original_bytes.getvalue()
+        )
+
+        # Publish with clickable channel-name caption
         await context.bot.send_photo(
             chat_id=TARGET_CHANNEL,
-            photo=selected["file_id"],
-            caption=caption,
+            photo=watermarked_photo,
+            caption=CAPTION,
+            parse_mode=ParseMode.HTML,
         )
 
         posted.add(selected["file_id"])
         db["posted"] = list(posted)
         save_db(db)
 
-        print("Photo posted successfully.")
+        print("Watermarked photo posted successfully.")
+        print("Caption: βΟΟTΨҒUL")
         print("Next scheduled post: in 2 hours.")
 
     except Exception as error:
@@ -240,19 +219,16 @@ async def post_one(context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================================
-# STARTUP
+# MAIN
 # ============================================================
-
-async def startup_post(context: ContextTypes.DEFAULT_TYPE):
-    print("Attempting startup post...")
-    await post_one(context)
-
 
 def main():
     print("================================")
     print("BIGBOORI PHOTO BOT")
     print(f"Target: {TARGET_CHANNEL}")
     print("Interval: 2 hours")
+    print("Watermark: subtle lower-right")
+    print("Caption: clickable βΟΟTΨҒUL")
     print("================================")
 
     application = (
@@ -268,13 +244,8 @@ def main():
         )
     )
 
-    # Attempt one post shortly after startup
-    application.job_queue.run_once(
-        startup_post,
-        when=5,
-    )
-
-    # Then post every 2 hours
+    # No immediate startup post.
+    # First scheduled post happens after 2 hours.
     application.job_queue.run_repeating(
         post_one,
         interval=POST_INTERVAL,
